@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
-import re
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -20,6 +19,7 @@ A4_WIDTH_CM = 21
 A4_HEIGHT_CM = 29.7
 DEFAULT_TEMPLATE = "template.docx"
 DEFAULT_TITLE = "Maintenance Report"
+MAINTENANCE_PICS_DIR = "Maintenancepics"
 
 
 def format_date_folder(name: str) -> str:
@@ -49,11 +49,58 @@ def add_page_break(document: Document) -> None:
     document.add_page_break()
 
 
-def title_to_filename(title: str) -> str:
-    slug = re.sub(r"[^A-Za-z0-9]+", "_", title.strip().lower()).strip("_")
-    if not slug:
-        slug = "report"
-    return f"{slug}_{datetime.now().strftime('%d_%b_%Y')}.docx"
+def resolve_case_insensitive(path_str: str) -> Path:
+    path = Path(path_str).expanduser()
+    if not path.is_absolute():
+        path = Path.cwd() / path
+
+    path = path.resolve(strict=False)
+    if path.exists():
+        return path
+
+    anchor = Path(path.anchor) if path.anchor else Path.cwd().anchor
+    current = Path(anchor) if isinstance(anchor, str) else anchor
+
+    for part in path.parts[len(current.parts) :]:
+        if not current.exists() or not current.is_dir():
+            return path
+
+        match = next(
+            (child for child in current.iterdir() if child.name.lower() == part.lower()),
+            None,
+        )
+        if match is None:
+            return path
+        current = match
+
+    return current
+
+
+def report_date_from_maintenancepics() -> datetime:
+    maintenance_root = resolve_case_insensitive(MAINTENANCE_PICS_DIR)
+    if not maintenance_root.exists():
+        raise SystemExit(f"Folder not found: {maintenance_root}")
+
+    date_values = []
+    for path in maintenance_root.iterdir():
+        if not path.is_dir():
+            continue
+        try:
+            date_values.append(datetime.strptime(path.name, "%Y%m%d"))
+        except ValueError:
+            continue
+
+    if not date_values:
+        raise SystemExit(f"No YYYYMMDD folders found in {maintenance_root}")
+
+    earliest = min(date_values)
+    monday = earliest - timedelta(days=earliest.weekday())
+    return monday
+
+
+def default_output_filename() -> str:
+    monday = report_date_from_maintenancepics()
+    return f"maintenance_report_{monday.strftime('%d%b%Y')}.docx"
 
 
 def configure_a4(document: Document) -> None:
@@ -165,7 +212,7 @@ def main() -> None:
     if not source_root.exists():
         raise SystemExit(f"Folder not found: {source_root}")
 
-    output_name = args.output or title_to_filename(args.title)
+    output_name = args.output or default_output_filename()
     output_path = Path(output_name).resolve()
     template_path = Path(args.template).resolve()
     if not template_path.exists():
