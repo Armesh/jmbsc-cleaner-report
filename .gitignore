@@ -1,0 +1,14 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Source image folders
+[Mm][Aa][Ii][Nn][Tt][Ee][Nn][Aa][Nn][Cc][Ee][Pp][Ii][Cc][Ss]/
+[Cc][Oo][Ll][Ll][Aa][Gg][Ee][Ss]/
