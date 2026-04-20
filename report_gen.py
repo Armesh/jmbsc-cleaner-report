@@ -13,7 +13,7 @@ SCRIPT_SEQUENCE = [
     "docx_to_pdf.py",
 ]
 COLLAGES_DIR = "Collages"
-DELETE_COLLAGES_AFTER_RUN = False
+DELETE_COLLAGES_AFTER_RUN = True
 
 
 def run_script(script_name: str, workdir: Path) -> None:

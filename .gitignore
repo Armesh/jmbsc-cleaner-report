@@ -12,3 +12,6 @@ wheels/
 # Source image folders
 [Mm][Aa][Ii][Nn][Tt][Ee][Nn][Aa][Nn][Cc][Ee][Pp][Ii][Cc][Ss]/
 [Cc][Oo][Ll][Ll][Aa][Gg][Ee][Ss]/
+
+# Ignore all PDF files
+*.pdf
