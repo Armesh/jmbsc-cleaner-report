@@ -15,10 +15,10 @@ Word report, and converts the report to PDF.
          photo1.jpg
          photo2.jpg
 
-4. Open PowerShell by holding shift+right click in this `jmbsc-cleaner-report` folder 
+4. Open PowerShell by holding shift+right click in this `jmbsc-cleaner-report` project folder 
 5. Type below command and hit Enter
 
-powershell -ExecutionPolicy Bypass -File .\run.ps1
+`powershell -ExecutionPolicy Bypass -File .\run.ps1`
 
 6. PDF Report `cleaners_report_{date}.pdf` will be generated.
 
