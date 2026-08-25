@@ -1,20 +1,27 @@
 from __future__ import annotations
 
 import argparse
-import math
 from pathlib import Path
 
 from PIL import Image, ImageOps
 
+from project_config import CONFIG
 
-SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
-SOURCE_ROOT = Path("MaintenancePics")
-OUTPUT_ROOT = Path("Collages")
-IMAGES_PER_ROW = 2
-COUNT = 4
-CELL_SIZE = (900, 900)
-BACKGROUND_COLOR = (255, 255, 255)
-PADDING = 1
+
+PATHS_CONFIG = CONFIG["paths"]
+IMAGES_CONFIG = CONFIG["images"]
+COLLAGE_CONFIG = CONFIG["collage"]
+SUPPORTED_EXTENSIONS = {
+    extension.lower() for extension in IMAGES_CONFIG["supported_extensions"]
+}
+SOURCE_ROOT = Path(PATHS_CONFIG["pics_dir"])
+OUTPUT_ROOT = Path(PATHS_CONFIG["collages_dir"])
+IMAGES_PER_ROW = COLLAGE_CONFIG["images_per_row"]
+COUNT = COLLAGE_CONFIG["count"]
+CELL_SIZE = tuple(COLLAGE_CONFIG["cell_size"])
+BACKGROUND_COLOR = tuple(COLLAGE_CONFIG["background_color"])
+PADDING = COLLAGE_CONFIG["padding"]
+JPEG_QUALITY = COLLAGE_CONFIG["jpeg_quality"]
 
 
 def resolve_case_insensitive(path_str: str) -> Path:
@@ -115,7 +122,7 @@ def build_collage(
     output_folder = output_root / relative_folder.parent
     output_folder.mkdir(parents=True, exist_ok=True)
     output_path = output_folder / f"{relative_folder.name}.jpg"
-    collage.save(output_path, format="JPEG", quality=92)
+    collage.save(output_path, format="JPEG", quality=JPEG_QUALITY)
     return output_path
 
 
@@ -161,10 +168,20 @@ def main() -> None:
 
     if args.images_per_row <= 0:
         raise SystemExit("--images-per-row must be greater than 0")
+    if COUNT <= 0:
+        raise SystemExit("collage.count in config.toml must be greater than 0")
     if args.cell_width <= 0 or args.cell_height <= 0:
         raise SystemExit("--cell-width and --cell-height must be greater than 0")
     if args.padding < 0:
         raise SystemExit("--padding must be 0 or greater")
+    if len(BACKGROUND_COLOR) != 3 or any(
+        channel < 0 or channel > 255 for channel in BACKGROUND_COLOR
+    ):
+        raise SystemExit(
+            "collage.background_color in config.toml must contain three values from 0 to 255"
+        )
+    if JPEG_QUALITY < 1 or JPEG_QUALITY > 95:
+        raise SystemExit("collage.jpeg_quality in config.toml must be from 1 to 95")
 
     source_root = resolve_case_insensitive(args.source_root)
     if not source_root.exists():

@@ -11,23 +11,38 @@ from docx.oxml.ns import qn
 from docx.shared import Cm
 from PIL import Image
 
-
-SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
-MAX_IMAGE_WIDTH_CM = 12
-MAX_IMAGE_HEIGHT_CM = 22
-A4_WIDTH_CM = 21
-A4_HEIGHT_CM = 29.7
-DEFAULT_TEMPLATE = "template.docx"
-DEFAULT_TITLE = "Maintenance Report"
-MAINTENANCE_PICS_DIR = "Maintenancepics"
+from project_config import CONFIG
 
 
-def format_date_folder(name: str) -> str:
-    date_value = datetime.strptime(name, "%Y%m%d")
-    return f"{date_value.day} {date_value.strftime('%b %Y')}"
+PATHS_CONFIG = CONFIG["paths"]
+IMAGES_CONFIG = CONFIG["images"]
+REPORT_CONFIG = CONFIG["report"]
+SUPPORTED_EXTENSIONS = {
+    extension.lower() for extension in IMAGES_CONFIG["supported_extensions"]
+}
+MAX_IMAGE_WIDTH_CM = REPORT_CONFIG["max_image_width_cm"]
+MAX_IMAGE_HEIGHT_CM = REPORT_CONFIG["max_image_height_cm"]
+PAGE_WIDTH_CM = REPORT_CONFIG["page_width_cm"]
+PAGE_HEIGHT_CM = REPORT_CONFIG["page_height_cm"]
+DEFAULT_TEMPLATE = PATHS_CONFIG["template_file"]
+DEFAULT_TITLE = REPORT_CONFIG["title"]
+PICS_DIR = PATHS_CONFIG["pics_dir"]
+COLLAGES_DIR = PATHS_CONFIG["collages_dir"]
+FILENAME_PREFIX = REPORT_CONFIG["filename_prefix"]
+FOLDER_DATE_FORMAT = REPORT_CONFIG["folder_date_format"]
+FILENAME_DATE_FORMAT = REPORT_CONFIG["filename_date_format"]
+HEADING_MONTH_YEAR_FORMAT = REPORT_CONFIG["heading_month_year_format"]
 
 
-def date_directories(root: Path) -> list[Path]:
+def format_folder_heading(name: str) -> str:
+    try:
+        date_value = datetime.strptime(name, FOLDER_DATE_FORMAT)
+    except ValueError:
+        return name
+    return f"{date_value.day} {date_value.strftime(HEADING_MONTH_YEAR_FORMAT)}"
+
+
+def report_directories(root: Path) -> list[Path]:
     return sorted(
         [path for path in root.iterdir() if path.is_dir()],
         key=lambda path: path.name,
@@ -76,37 +91,42 @@ def resolve_case_insensitive(path_str: str) -> Path:
     return current
 
 
-def report_date_from_maintenancepics() -> datetime:
-    maintenance_root = resolve_case_insensitive(MAINTENANCE_PICS_DIR)
-    if not maintenance_root.exists():
-        raise SystemExit(f"Folder not found: {maintenance_root}")
+def report_filename_suffix_from_pics() -> str:
+    pics_root = resolve_case_insensitive(PICS_DIR)
+    if not pics_root.exists():
+        raise SystemExit(f"Folder not found: {pics_root}")
+
+    folder_names = sorted(
+        [path.name for path in pics_root.iterdir() if path.is_dir()],
+        key=str.lower,
+    )
+    if not folder_names:
+        raise SystemExit(f"No folders found in {pics_root}")
 
     date_values = []
-    for path in maintenance_root.iterdir():
-        if not path.is_dir():
-            continue
+    for name in folder_names:
         try:
-            date_values.append(datetime.strptime(path.name, "%Y%m%d"))
+            date_values.append(datetime.strptime(name, FOLDER_DATE_FORMAT))
         except ValueError:
             continue
 
-    if not date_values:
-        raise SystemExit(f"No YYYYMMDD folders found in {maintenance_root}")
+    if date_values:
+        earliest = min(date_values)
+        monday = earliest - timedelta(days=earliest.weekday())
+        return monday.strftime(FILENAME_DATE_FORMAT)
 
-    earliest = min(date_values)
-    monday = earliest - timedelta(days=earliest.weekday())
-    return monday
+    return datetime.now().strftime(FILENAME_DATE_FORMAT)
 
 
 def default_output_filename() -> str:
-    monday = report_date_from_maintenancepics()
-    return f"maintenance_report_{monday.strftime('%d%b%Y')}.docx"
+    suffix = report_filename_suffix_from_pics()
+    return f"{FILENAME_PREFIX}{suffix}.docx"
 
 
-def configure_a4(document: Document) -> None:
+def configure_page_size(document: Document) -> None:
     for section in document.sections:
-        section.page_width = Cm(A4_WIDTH_CM)
-        section.page_height = Cm(A4_HEIGHT_CM)
+        section.page_width = Cm(PAGE_WIDTH_CM)
+        section.page_height = Cm(PAGE_HEIGHT_CM)
 
 
 def add_page_numbers(document: Document) -> None:
@@ -148,28 +168,28 @@ def build_report(
     title: str,
 ) -> None:
     document = Document(str(template_path)) if template_path else Document()
-    configure_a4(document)
+    configure_page_size(document)
     add_page_numbers(document)
     document.add_heading(title, level=0)
-    first_date = True
-    first_picture_in_date = True
+    first_section = True
+    first_picture_in_section = True
 
-    for date_dir in date_directories(source_root):
-        pictures = image_files(date_dir)
+    for report_dir in report_directories(source_root):
+        pictures = image_files(report_dir)
         if not pictures:
             continue
 
-        if not first_date:
+        if not first_section:
             add_page_break(document)
-        first_date = False
-        first_picture_in_date = True
+        first_section = False
+        first_picture_in_section = True
 
-        document.add_heading(format_date_folder(date_dir.name), level=1)
+        document.add_heading(format_folder_heading(report_dir.name), level=1)
 
         for picture in pictures:
-            if not first_picture_in_date:
+            if not first_picture_in_section:
                 add_page_break(document)
-            first_picture_in_date = False
+            first_picture_in_section = False
 
             document.add_heading(picture.stem.upper(), level=2)
 
@@ -181,13 +201,13 @@ def build_report(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Generate a Word report from pictures in Collages."
+        description=f"Generate a Word report from pictures in {COLLAGES_DIR}."
     )
     parser.add_argument(
         "source",
         nargs="?",
-        default="Collages",
-        help="Root folder containing date folders. Defaults to ./Collages",
+        default=COLLAGES_DIR,
+        help=f"Root folder containing report folders. Defaults to ./{COLLAGES_DIR}",
     )
     parser.add_argument(
         "--output",
@@ -207,6 +227,11 @@ def main() -> None:
         ),
     )
     args = parser.parse_args()
+
+    if MAX_IMAGE_WIDTH_CM <= 0 or MAX_IMAGE_HEIGHT_CM <= 0:
+        raise SystemExit("report maximum image dimensions in config.toml must be positive")
+    if PAGE_WIDTH_CM <= 0 or PAGE_HEIGHT_CM <= 0:
+        raise SystemExit("report page dimensions in config.toml must be positive")
 
     source_root = Path(args.source).resolve()
     if not source_root.exists():

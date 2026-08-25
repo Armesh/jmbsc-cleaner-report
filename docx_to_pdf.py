@@ -5,11 +5,17 @@ import shutil
 import subprocess
 from pathlib import Path
 
+from project_config import CONFIG
 
-WORD_FORMAT_PDF = 17
-WORD_OPTIMIZE_FOR_ONSCREEN = 1
-GHOSTSCRIPT_CANDIDATES = ("gswin64c", "gswin32c", "gs")
-DELETE_DOCX_AFTER_SUCCESS = True
+
+PDF_CONFIG = CONFIG["pdf"]
+WORD_FORMAT_PDF = PDF_CONFIG["word_format_pdf"]
+WORD_OPTIMIZE_FOR_ONSCREEN = PDF_CONFIG["word_optimize_for"]
+GHOSTSCRIPT_CANDIDATES = tuple(PDF_CONFIG["ghostscript_candidates"])
+GHOSTSCRIPT_COMPATIBILITY_LEVEL = PDF_CONFIG["ghostscript_compatibility_level"]
+GHOSTSCRIPT_PDF_SETTINGS = PDF_CONFIG["ghostscript_pdf_settings"]
+COMPRESS_AFTER_EXPORT = PDF_CONFIG["compress_after_export"]
+DELETE_DOCX_AFTER_SUCCESS = PDF_CONFIG["delete_docx_after_success"]
 
 
 def newest_docx(workdir: Path) -> Path:
@@ -58,8 +64,8 @@ def compress_pdf(path: Path) -> bool:
         [
             gs,
             "-sDEVICE=pdfwrite",
-            "-dCompatibilityLevel=1.4",
-            "-dPDFSETTINGS=/screen",
+            f"-dCompatibilityLevel={GHOSTSCRIPT_COMPATIBILITY_LEVEL}",
+            f"-dPDFSETTINGS={GHOSTSCRIPT_PDF_SETTINGS}",
             "-dNOPAUSE",
             "-dQUIET",
             "-dBATCH",
@@ -93,9 +99,10 @@ def main() -> None:
         help="Optional output .pdf filename. Defaults to the input filename with .pdf",
     )
     parser.add_argument(
-        "--no-compress",
-        action="store_true",
-        help="Skip PDF compression attempt after export.",
+        "--compress",
+        action=argparse.BooleanOptionalAction,
+        default=COMPRESS_AFTER_EXPORT,
+        help="Attempt PDF compression after export.",
     )
     args = parser.parse_args()
 
@@ -108,7 +115,7 @@ def main() -> None:
     export_pdf_via_word(input_path, output_path)
     print(f"CREATED {output_path}")
 
-    if not args.no_compress:
+    if args.compress:
         compress_pdf(output_path)
 
     if DELETE_DOCX_AFTER_SUCCESS:

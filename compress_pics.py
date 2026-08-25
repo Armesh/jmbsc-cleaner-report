@@ -7,8 +7,23 @@ from typing import Iterable
 
 from PIL import Image, ImageOps
 
+from project_config import CONFIG
 
-SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+PATHS_CONFIG = CONFIG["paths"]
+IMAGES_CONFIG = CONFIG["images"]
+COMPRESSION_CONFIG = CONFIG["compression"]
+SUPPORTED_EXTENSIONS = {
+    extension.lower() for extension in IMAGES_CONFIG["supported_extensions"]
+}
+DEFAULT_ROOT = Path(PATHS_CONFIG["collages_dir"])
+TARGET_SIZE_RATIO = COMPRESSION_CONFIG["target_size_ratio"]
+MIN_JPEG_QUALITY = COMPRESSION_CONFIG["min_jpeg_quality"]
+MAX_JPEG_QUALITY = COMPRESSION_CONFIG["max_jpeg_quality"]
+OPTIMIZE = COMPRESSION_CONFIG["optimize"]
+PROGRESSIVE = COMPRESSION_CONFIG["progressive"]
+SUBSAMPLING = COMPRESSION_CONFIG["subsampling"]
+DRY_RUN = COMPRESSION_CONFIG["dry_run"]
 
 
 def iter_images(root: Path) -> Iterable[Path]:
@@ -28,9 +43,9 @@ def encode_jpeg(
     save_kwargs = {
         "format": "JPEG",
         "quality": quality,
-        "optimize": True,
-        "progressive": True,
-        "subsampling": 0,
+        "optimize": OPTIMIZE,
+        "progressive": PROGRESSIVE,
+        "subsampling": SUBSAMPLING,
     }
     if icc_profile is not None:
         save_kwargs["icc_profile"] = icc_profile
@@ -43,7 +58,7 @@ def encode_jpeg(
 
 def compress_image(path: Path, dry_run: bool = False) -> tuple[bool, int, int]:
     original_size = path.stat().st_size
-    target_size = max(int(original_size * 0.5), 1)
+    target_size = max(int(original_size * TARGET_SIZE_RATIO), 1)
 
     with Image.open(path) as source:
         image = ImageOps.exif_transpose(source)
@@ -54,8 +69,8 @@ def compress_image(path: Path, dry_run: bool = False) -> tuple[bool, int, int]:
 
         # Search for the highest quality that still gets close to the target.
         best_data: bytes | None = None
-        low = 20
-        high = 95
+        low = MIN_JPEG_QUALITY
+        high = MAX_JPEG_QUALITY
 
         while low <= high:
             quality = (low + high) // 2
@@ -76,7 +91,7 @@ def compress_image(path: Path, dry_run: bool = False) -> tuple[bool, int, int]:
         if best_data is None:
             best_data = encode_jpeg(
                 image,
-                20,
+                MIN_JPEG_QUALITY,
                 icc_profile=icc_profile,
                 exif=exif,
             )
@@ -94,20 +109,31 @@ def compress_image(path: Path, dry_run: bool = False) -> tuple[bool, int, int]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Compress images under a Collages folder."
+        description=f"Compress images under the {DEFAULT_ROOT} folder."
     )
     parser.add_argument(
         "root",
         nargs="?",
-        default="Collages",
-        help="Root folder to scan. Defaults to ./Collages",
+        default=str(DEFAULT_ROOT),
+        help=f"Root folder to scan. Defaults to ./{DEFAULT_ROOT}",
     )
     parser.add_argument(
         "--dry-run",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=DRY_RUN,
         help="Show planned savings without modifying files.",
     )
     args = parser.parse_args()
+
+    if TARGET_SIZE_RATIO <= 0 or TARGET_SIZE_RATIO > 1:
+        raise SystemExit(
+            "compression.target_size_ratio in config.toml must be greater than 0 and at most 1"
+        )
+    if not 1 <= MIN_JPEG_QUALITY <= MAX_JPEG_QUALITY <= 95:
+        raise SystemExit(
+            "compression JPEG quality values in config.toml must satisfy "
+            "1 <= min_jpeg_quality <= max_jpeg_quality <= 95"
+        )
 
     root = Path(args.root).resolve()
     if not root.exists():
