@@ -30,16 +30,39 @@ powershell -ExecutionPolicy Bypass -File .\run.ps1
 
 
 
+## First-Time Setup
 
+These steps are only needed once on a Windows computer.
 
+### 1. Install uv
 
+Open PowerShell and install `uv` with Windows Package Manager:
 
+```powershell
+winget install --id=astral-sh.uv -e
+```
 
+Close and reopen PowerShell, then confirm that it is available:
 
+```powershell
+uv --version
+```
 
+Other official installation methods are available in the
+[uv installation guide](https://docs.astral.sh/uv/getting-started/installation/).
 
+### 2. Create the project environment
 
+Open PowerShell in this `jmbsc-cleaner-report` project folder.
 
+Run this command from the project folder in PowerShell:
+
+```powershell
+uv sync --locked
+```
+
+This installs the Python version and package versions required by the project. After it finishes, follow the **Daily
+Use** instructions above.
 
 ## Configuration files
 
